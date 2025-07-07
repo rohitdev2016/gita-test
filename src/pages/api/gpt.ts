@@ -1,5 +1,4 @@
-//Test
-
+// pages/api/gpt.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import OpenAI from "openai";
 
@@ -7,29 +6,20 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-type LangCode = "english" | "hindi" | "telugu";
-
-type RequestBody = {
-  question: string;
-  languages: LangCode[];
-};
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { question, languages } = req.body as RequestBody;
+  const { question, languages } = req.body;
 
-  if (!question || !Array.isArray(languages) || languages.length === 0) {
+  if (!question || !Array.isArray(languages)) {
     return res.status(400).json({ error: "Missing question or languages." });
   }
 
   const systemPrompt = `
-You are a compassionate spiritual guide.
-Respond with Bhagavad Gita verses and brief explanations in these languages: ${languages.join(", ")}.
-Use this format:
-
+You are a compassionate spiritual guide. Use verses from the Bhagavad Gītā to answer the user's question in these languages: ${languages.join(", ")}.
+Return the answer in this format:
 {
   "english": "...",
   "hindi": "...",
@@ -44,17 +34,17 @@ Use this format:
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `Question: ${question}`,
+          content: question,
         },
       ],
     });
 
-    const raw = completion.choices[0].message?.content ?? "{}";
+    const content = completion.choices[0].message?.content ?? "{}";
+    const parsed = JSON.parse(content);
 
-    const response = JSON.parse(raw);
-    return res.status(200).json({ responses: response });
-  } catch (err: any) {
-    console.error("GPT error:", err);
-    return res.status(500).json({ error: "GPT failed", detail: err.message });
+    res.status(200).json({ responses: parsed });
+  } catch (error: any) {
+    console.error("OpenAI Error:", error);
+    res.status(500).json({ error: "OpenAI request failed", detail: error.message });
   }
 }
