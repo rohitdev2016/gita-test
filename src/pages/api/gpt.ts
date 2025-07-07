@@ -1,16 +1,11 @@
-// pages/api/gpt.ts
 import type { NextApiRequest, NextApiResponse } from "next";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Make sure this is set in .env.local
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 type LangCode = "english" | "hindi" | "telugu";
-
-type GPTResponse = {
-  [key in LangCode]?: string;
-};
 
 type RequestBody = {
   question: string;
@@ -19,24 +14,20 @@ type RequestBody = {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed. Use POST." });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   const { question, languages } = req.body as RequestBody;
 
   if (!question || !Array.isArray(languages) || languages.length === 0) {
-    return res.status(400).json({ error: "Invalid request. Provide question and at least one language." });
+    return res.status(400).json({ error: "Missing question or languages." });
   }
 
   const systemPrompt = `
-You are a compassionate spiritual guide based on the Bhagavad Gita. For each user question, return a JSON response that includes:
-- A Bhagavad Gita verse (include chapter and verse number).
-- A brief explanation in each requested language.
+You are a compassionate spiritual guide.
+Respond with Bhagavad Gita verses and brief explanations in these languages: ${languages.join(", ")}.
+Use this format:
 
-Output JSON only. Return keys matching only these possible language values: "english", "hindi", "telugu".
-Do NOT include extra commentary or non-JSON text.
-
-Example:
 {
   "english": "...",
   "hindi": "...",
@@ -46,32 +37,22 @@ Example:
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4", // or "gpt-3.5-turbo" if needed
+      model: "gpt-4",
       messages: [
-        { role: "system", content: systemPrompt.trim() },
+        { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `Question: ${question}\nLanguages requested: ${languages.join(", ")}`,
+          content: `Question: ${question}`,
         },
       ],
-      temperature: 0.8,
     });
 
-    const raw = completion.choices[0].message?.content?.trim() || "{}";
+    const raw = completion.choices[0].message?.content ?? "{}";
 
-    let parsed: GPTResponse = {};
-    try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      return res.status(500).json({
-        error: "Failed to parse GPT response. Expected valid JSON.",
-        raw,
-      });
-    }
-
-    return res.status(200).json({ responses: parsed });
-  } catch (error: any) {
-    console.error("OpenAI API error:", error);
-    return res.status(500).json({ error: "Internal server error", details: error.message });
+    const response = JSON.parse(raw);
+    return res.status(200).json({ responses: response });
+  } catch (err: any) {
+    console.error("GPT error:", err);
+    return res.status(500).json({ error: "GPT failed", detail: err.message });
   }
 }
